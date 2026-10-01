@@ -144,9 +144,41 @@
         border-top: 1px solid var(--border);
     }
     footer a { color: var(--accent); }
+    .site-nav {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem 1.5rem;
+        padding: 0.85rem 1.5rem;
+        background: #1a1a1a;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    .site-nav a {
+        color: #d8d4cc;
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 600;
+        padding: 0.25rem 0.5rem;
+        border-radius: 6px;
+    }
+    .site-nav a:hover { color: #fff; }
+    .site-nav a.active {
+        color: #ffffff;
+        background: var(--accent);
+    }
 </style>
 </head>
 <body>
+
+<nav class="site-nav">
+    <a href="../index.html">Home</a>
+    <a href="./index.html" class="active">Project 0</a>
+    <a href="../proj1/index.html">Project 1</a>
+    <a href="../proj2/index.html">Project 2</a>
+</nav>
 
 <header>
     <h1>Becoming Friends with Your Camera</h1>
