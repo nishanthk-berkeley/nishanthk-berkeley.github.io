@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project 4: [Auto]Stitching Photo Mosaics</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<style>
+    :root {
+        --bg: #fafaf8;
+        --text: #1a1a1a;
+        --muted: #5a5a5a;
+        --accent: #b5482a;
+        --border: #e3e0da;
+        --card: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        margin: 0;
+        line-height: 1.6;
+    }
+    header {
+        padding: 4rem 1.5rem 2.5rem;
+        text-align: center;
+        border-bottom: 1px solid var(--border);
+    }
+    header h1 {
+        font-size: 2.2rem;
+        margin: 0 0 0.5rem;
+        letter-spacing: -0.02em;
+    }
+    header p.subtitle {
+        color: var(--muted);
+        margin: 0;
+        font-size: 1.05rem;
+    }
+    nav.toc {
+        display: flex;
+        justify-content: center;
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+        flex-wrap: wrap;
+    }
+    nav.toc a {
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+    nav.toc a:hover { text-decoration: underline; }
+    main {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 3rem 2rem 5rem;
+    }
+    section {
+        margin-bottom: 4.5rem;
+    }
+    section h2 {
+        font-size: 1.6rem;
+        margin: 0 auto 0.25rem;
+        border-bottom: 2px solid var(--accent);
+        display: table;
+        padding-bottom: 0.2rem;
+    }
+    section h3.subhead {
+        font-size: 1.15rem;
+        margin: 2rem auto 0.25rem;
+    }
+    section > p.intro {
+        color: var(--muted);
+        max-width: 960px;
+        margin: 0.75rem auto 0;
+    }
+    .image-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.25rem;
+        margin: 1.5rem auto;
+        max-width: 560px;
+    }
+    .image-grid.single {
+        grid-template-columns: 1fr;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .image-grid.triptych {
+        grid-template-columns: repeat(3, 1fr);
+        max-width: 960px;
+    }
+    .result-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1.5rem;
+        margin: 1.5rem 0;
+    }
+    .failure-layout {
+        display: flex;
+        gap: 1.5rem;
+        align-items: flex-start;
+        max-width: 960px;
+        margin: 1.5rem auto;
+    }
+    .failure-layout figure {
+        flex: 0 0 440px;
+        max-width: 440px;
+    }
+    .failure-layout .analysis {
+        flex: 1;
+        min-width: 260px;
+        margin-top: 0;
+    }
+    @media (max-width: 700px) {
+        .failure-layout { flex-direction: column; }
+        .failure-layout figure { max-width: 100%; flex: 1 1 auto; }
+    }
+    .gallery-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1.25rem;
+        margin: 1.5rem 0;
+    }
+    @media (max-width: 760px) {
+        .gallery-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 420px) {
+        .gallery-grid { grid-template-columns: 1fr; }
+    }
+    .gallery-grid.gallery-3 { grid-template-columns: repeat(3, 1fr); }
+    .gallery-grid.gallery-5 { grid-template-columns: repeat(5, 1fr); }
+    @media (max-width: 760px) {
+        .gallery-grid.gallery-3 { grid-template-columns: repeat(2, 1fr); }
+        .gallery-grid.gallery-5 { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 420px) {
+        .gallery-grid.gallery-3 { grid-template-columns: 1fr; }
+        .gallery-grid.gallery-5 { grid-template-columns: 1fr; }
+    }
+    figcaption .name {
+        display: block;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-weight: 600;
+        color: var(--text);
+    }
+    .legend {
+        list-style: none;
+        max-width: 960px;
+        margin: 1rem auto 0;
+        padding: 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+    }
+    .legend li { margin-bottom: 0.4rem; }
+    .legend .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: var(--text);
+        font-weight: 600;
+    }
+    figure {
+        margin: 0;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    figure img {
+        width: 100%;
+        height: auto;
+        display: block;
+        background: #ececec;
+    }
+    figcaption {
+        padding: 0.75rem 1rem;
+        font-size: 0.9rem;
+        color: var(--muted);
+        text-align: center;
+    }
+    figcaption .shift {
+        display: block;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.8rem;
+        margin-top: 0.25rem;
+    }
+    .placeholder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 320px;
+        background: repeating-linear-gradient(
+            45deg,
+            #f0efe9,
+            #f0efe9 10px,
+            #e8e6de 10px,
+            #e8e6de 20px
+        );
+        color: var(--muted);
+        font-size: 0.9rem;
+        text-align: center;
+        padding: 1rem;
+    }
+    .equation {
+        text-align: center;
+        margin: 1.25rem 0;
+        overflow-x: auto;
+        padding: 0.25rem 0;
+    }
+    .analysis {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 1.25rem 1.5rem;
+        max-width: 960px;
+        margin: 1.5rem auto 0;
+    }
+    .analysis h3 {
+        margin-top: 0;
+        font-size: 1rem;
+        color: var(--accent);
+    }
+    table.metrics {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 0.75rem 0;
+        font-size: 0.9rem;
+    }
+    table.metrics th, table.metrics td {
+        border: 1px solid var(--border);
+        padding: 0.5rem 0.75rem;
+        text-align: left;
+    }
+    table.metrics th {
+        background: var(--bg);
+        font-weight: 600;
+    }
+    table.metrics td.mono, table.metrics th.mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    pre.code {
+        background: #1e1e1e;
+        color: #e6e6e6;
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        overflow-x: auto;
+        max-width: 960px;
+        margin: 1.25rem auto;
+        font-size: 0.85rem;
+        line-height: 1.5;
+    }
+    pre.code code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .badge {
+        display: inline-block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.15rem 0.55rem;
+        border-radius: 999px;
+        margin-left: 0.5rem;
+        vertical-align: middle;
+    }
+    .badge.todo {
+        background: #fbeee9;
+        color: var(--accent);
+        border: 1px solid #eccabf;
+    }
+    footer {
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.85rem;
+        padding: 2rem 1.5rem 3rem;
+        border-top: 1px solid var(--border);
+    }
+    footer a { color: var(--accent); }
+    .site-nav {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem 1.5rem;
+        padding: 0.85rem 1.5rem;
+        background: #1a1a1a;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    .site-nav a {
+        color: #d8d4cc;
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 600;
+        padding: 0.25rem 0.5rem;
+        border-radius: 6px;
+    }
+    .site-nav a:hover { color: #fff; }
+    .site-nav a.active {
+        color: #ffffff;
+        background: var(--accent);
+    }
+    .toc-label {
+        margin: 1.5rem 0 0;
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+    }
+    .toc-label + nav.toc { margin-top: 0.5rem; }
+    .part-divider {
+        text-align: center;
+        font-size: 1.05rem;
+        color: var(--muted);
+        margin: 0 auto 3.5rem;
+        padding: 1.5rem 0;
+        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+    }
+    .part-divider span {
+        display: block;
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--text);
+        letter-spacing: -0.02em;
+    }
+    .badge.pending { background: #f3f1ec; color: var(--muted); border: 1px solid var(--border); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; }
+    .image-grid.single.wide { max-width: 1100px; }
+    .gallery-grid.gallery-6 { grid-template-columns: repeat(6, 1fr); gap: 0.75rem; }
+    @media (max-width: 900px) { .gallery-grid.gallery-6 { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 480px) { .gallery-grid.gallery-6 { grid-template-columns: repeat(2, 1fr); } }
+    .hybrid-pair {
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 2rem;
+        flex-wrap: wrap;
+        margin: 1.5rem auto;
+    }
+    .hybrid-pair .hybrid-close { width: 100%; max-width: 420px; }
+    .hybrid-pair .hybrid-far { width: 112px; }
+    .hybrid-pair .hybrid-far img { width: 96px; margin: 8px auto 0; }
+    .hybrid-pair .hybrid-far figcaption { padding: 0.5rem; font-size: 0.75rem; }
+    h4.steps-label {
+        max-width: 1100px;
+        margin: 1.75rem auto 0;
+        font-size: 0.85rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+    }
+    .analysis table.metrics td { vertical-align: middle; }
+    .analysis table.metrics .katex { font-size: 0.85em; }
+</style>
+</head>
+<body>
+
+<nav class="site-nav">
+    <a href="../index.html">Home</a>
+    <a href="../1/index.html">Project 0</a>
+    <a href="../proj1/index.html">Project 1</a>
+    <a href="../proj2/index.html">Project 2</a>
+    <a href="../proj3/index.html">Project 3</a>
+    <a href="./index.html" class="active">Project 4</a>
+</nav>
+
+<header>
+    <h1>[Auto]Stitching Photo Mosaics</h1>
+    <p class="subtitle">CS 180 &mdash; Project 4</p>
+    <p class="toc-label">Part A: Image Warping and Mosaicing</p>
+    <nav class="toc">
+        <a href="#a1">A.1 Shooting the Pictures</a>
+        <a href="#a2">A.2 Recovering Homographies</a>
+        <a href="#a3">A.3 Warping &amp; Rectification</a>
+        <a href="#a4">A.4 Blending into Mosaics</a>
+    </nav>
+</header>
+
+<main>
+
+    <div class="part-divider" id="partA" style="border-top: none; padding-top: 0;"><span>Part A</span>Image Warping and Mosaicing</div>
+
+    <!-- ============================ A.1 ============================ -->
+    <section id="a1">
+        <h2>A.1 Shooting the Pictures</h2>
+        <p class="intro">
+            For a homography to relate with two photos exactly, the camera must rotate around a fixed center of
+            projection without moving. To capture the images, I went around Berkeley and stood in one spot and rotated
+            my phone between shots, keeping roughly 40&ndash;70% overlap between neighboring photos and taking each set
+            back to back so lighting wouldn't change. Each set of images is three 4032&times;3024 photos (left, center,
+            right).
+        </p>
+        <h3 class="subhead">Set 1: Sproul Hall</h3>
+        <div class="image-grid single wide">
+            <figure><img src="images/sproul_sources.jpg" alt="Sproul Hall source photos: left, center, right"><figcaption>Left &middot; Center &middot; Right</figcaption></figure>
+        </div>
+        <h3 class="subhead">Set 2: Sather Gate</h3>
+        <div class="image-grid single wide">
+            <figure><img src="images/sather_sources.jpg" alt="Sather Gate source photos: left, center, right"><figcaption>Left &middot; Center &middot; Right</figcaption></figure>
+        </div>
+        <h3 class="subhead">Set 3: Residential Street</h3>
+        <div class="image-grid single wide">
+            <figure><img src="images/residential_sources.jpg" alt="Residential street source photos: left, center, right"><figcaption>Left &middot; Center &middot; Right</figcaption></figure>
+        </div>
+    </section>
+
+    <!-- ============================ A.2 ============================ -->
+    <section id="a2">
+        <h2>A.2 Recovering Homographies</h2>
+        <p class="intro">
+            A homography is a 3&times;3 projective transform \(H\) with 8 degrees of freedom (the bottom-right entry is
+            fixed to 1). It maps a point \((x, y)\) in one image to \((u, v)\) in the other. I picked 10 corresponding
+            points for each pair of images by hand with a click-to-select tool in matplotlib, choosing sharp,
+            easy-to-locate features like building corners, window edges and lamp posts.
+        </p>
+        <div class="equation">\[ \begin{bmatrix} wu \\ wv \\ w \end{bmatrix} = \begin{bmatrix} a & b & c \\ d & e & f \\ g & h & 1 \end{bmatrix} \begin{bmatrix} x \\ y \\ 1 \end{bmatrix} \quad\Longrightarrow\quad u = \frac{ax + by + c}{gx + hy + 1}, \qquad v = \frac{dx + ey + f}{gx + hy + 1} \]</div>
+        <h3 class="subhead">System of equations</h3>
+        <p class="intro">
+            Multiplying out the denominators turns both equations into linear in the 8 unknowns, so each correspondence
+            gives two rows. Stacking all \(n\) correspondences gives a \(2n \times 8\) system \(A\mathbf{h} = \mathbf{b}\):
+        </p>
+        <div class="equation">\[ \begin{bmatrix}
+            x_1 & y_1 & 1 & 0 & 0 & 0 & -u_1x_1 & -u_1y_1 \\
+            0 & 0 & 0 & x_1 & y_1 & 1 & -v_1x_1 & -v_1y_1 \\
+            \vdots & & & & & & & \vdots \\
+            x_n & y_n & 1 & 0 & 0 & 0 & -u_nx_n & -u_ny_n \\
+            0 & 0 & 0 & x_n & y_n & 1 & -v_nx_n & -v_ny_n
+        \end{bmatrix}
+        \begin{bmatrix} a \\ b \\ c \\ d \\ e \\ f \\ g \\ h \end{bmatrix}
+        =
+        \begin{bmatrix} u_1 \\ v_1 \\ \vdots \\ u_n \\ v_n \end{bmatrix} \]</div>
+        <p class="intro">
+            Four points give exactly 8 equations, but the small clicking errors that I may have made due to cursor
+            precision make that solution unstable. With \(n = 10\) the system is overdetermined (20 equations, 8
+            unknowns), so I solve it with least squares (<span class="mono">np.linalg.lstsq</span>), minimizing
+            \(\lVert A\mathbf{h} - \mathbf{b}\rVert^2\). My
+            <span class="mono">calc_homography(image1_points, image2_points)</span> builds \(A\) and \(\mathbf{b}\),
+            solves for \(\mathbf{h}\), appends the 1 and reshapes it into \(H\).
+        </p>
+
+        <h3 class="subhead">Correspondences: Sproul Hall</h3>
+        <div class="image-grid single wide">
+            <figure><img src="images/sproul_left_center_points.jpg" alt="Sproul left-center correspondences"><figcaption>Left &harr; Center, 10 numbered correspondences</figcaption></figure>
+            <figure><img src="images/sproul_right_center_points.jpg" alt="Sproul right-center correspondences"><figcaption>Right &harr; Center, 10 numbered correspondences</figcaption></figure>
+        </div>
+
+        <h3 class="subhead">Recovered homographies: Sproul Hall</h3>
+        <p class="intro">Both map into the center image's coordinates (full 4032&times;3024 resolution):</p>
+        <div class="equation">\[ H_{\text{left}\rightarrow\text{center}} = \begin{bmatrix}1.857 & -0.2368 & -2169.1 \\ 0.7839 & 1.585 & -1626.3 \\ 2.929\times10^{-4} & -1.292\times10^{-5} & 1\end{bmatrix} \qquad H_{\text{right}\rightarrow\text{center}} = \begin{bmatrix}0.5086 & 0.1095 & 1274.2 \\ -0.4257 & 0.8624 & 362.5 \\ -1.607\times10^{-4} & -3.454\times10^{-7} & 1\end{bmatrix} \]</div>
+
+        <div class="analysis">
+            <h3>All recovered homographies</h3>
+            <p>
+                To check each fit, I mapped the 10 source points through \(H\) and measured how far they landed from
+                the clicked target points. Errors are in pixels at full resolution.
+            </p>
+            <table class="metrics">
+                <tr><th>Set</th><th>Pair</th><th>\(H\)</th><th>Mean error</th></tr>
+                <tr><td>Sproul Hall</td><td>Left &rarr; Center</td><td>\(\begin{bmatrix}1.857 & -0.2368 & -2169.1 \\ 0.7839 & 1.585 & -1626.3 \\ 2.929\times10^{-4} & -1.292\times10^{-5} & 1\end{bmatrix}\)</td><td class="mono">6.01 px</td></tr>
+                <tr><td>Sproul Hall</td><td>Right &rarr; Center</td><td>\(\begin{bmatrix}0.5086 & 0.1095 & 1274.2 \\ -0.4257 & 0.8624 & 362.5 \\ -1.607\times10^{-4} & -3.454\times10^{-7} & 1\end{bmatrix}\)</td><td class="mono">4.05 px</td></tr>
+                <tr><td>Sather Gate</td><td>Left &rarr; Center</td><td>\(\begin{bmatrix}1.466 & -0.1655 & -1869.6 \\ 0.5256 & 1.192 & -875.6 \\ 2.009\times10^{-4} & -6.260\times10^{-5} & 1\end{bmatrix}\)</td><td class="mono">3.47 px</td></tr>
+                <tr><td>Sather Gate</td><td>Right &rarr; Center</td><td>\(\begin{bmatrix}0.5962 & -9.104\times10^{-3} & 1206.5 \\ -0.3148 & 0.7462 & 491.6 \\ -1.243\times10^{-4} & -3.087\times10^{-5} & 1\end{bmatrix}\)</td><td class="mono">9.33 px</td></tr>
+                <tr><td>Residential</td><td>Left &rarr; Center</td><td>\(\begin{bmatrix}1.896 & -0.291 & -2868.7 \\ 0.8532 & 1.603 & -1950.7 \\ 3.165\times10^{-4} & -3.192\times10^{-5} & 1\end{bmatrix}\)</td><td class="mono">10.83 px</td></tr>
+                <tr><td>Residential</td><td>Right &rarr; Center</td><td>\(\begin{bmatrix}0.5351 & 0.01706 & 1169.5 \\ -0.3753 & 0.7582 & 593.7 \\ -1.362\times10^{-4} & -2.911\times10^{-5} & 1\end{bmatrix}\)</td><td class="mono">4.80 px</td></tr>
+            </table>
+        </div>
+    </section>
+
+    <!-- ============================ A.3 ============================ -->
+    <section id="a3">
+        <h2>A.3 Warping the Images &amp; Rectification</h2>
+        <p class="intro">
+            My <span class="mono">image_warping(image, H, output_shape, interpolation)</span> uses the inverse warping
+            to avoid holes. For every pixel \((x', y')\) in the output, it applies \(H^{-1}\) to find where that pixel
+            comes from in the source image, then samples the source there. Going backwards avoids the holes, and it
+            guarantees that every output pixel will get a value. Furthermore, any output pixels whose source location
+            falls outside the image are marked invalid in an alpha mask, which is reused for blending in A.4. Both
+            interpolation methods:
+        </p>
+        <ul class="legend" style="max-width: 960px;">
+            <li><span class="mono">nearest</span>: round the source coordinate to the closest pixel and copy its color.</li>
+            <li><span class="mono">bilinear</span>: take the 4 surrounding pixels and average them, weighting each by how close it is:
+                \((1-dx)(1-dy)\,I_{00} + dx(1-dy)\,I_{10} + (1-dx)\,dy\,I_{01} + dx\,dy\,I_{11}\).</li>
+        </ul>
+
+        <h3 class="subhead">Rectification</h3>
+        <p class="intro">
+            To test the warp function, I rectified rectangular windows photographed at an angle. I clicked the window's
+            4 corners (top-left, top-right, bottom-right, bottom-left) and then I computed the homography that sends
+            them to the corners of an upright rectangle. That rectangle's size comes from the average lengths of the
+            clicked edges, scaled so the longer side is 600 px, which keeps the window's proportions instead of
+            compressing it.
+        </p>
+        <div class="image-grid single wide">
+            <figure><img src="images/rectification_1.jpg" alt="Sproul Hall window: original with corners and rectified"><figcaption><span class="name">Rectification 1: Sproul Hall window</span>clicked corners (left) &rarr; rectified (right)</figcaption></figure>
+            <figure><img src="images/rectification_2.jpg" alt="Residential window: original with corners and rectified"><figcaption><span class="name">Rectification 2: house window</span>clicked corners (left) &rarr; rectified (right)</figcaption></figure>
+        </div>
+
+        <h3 class="subhead">Nearest neighbor vs. bilinear</h3>
+        <div class="image-grid" style="max-width: 1100px;">
+            <figure><img src="images/rectification_1_nn_vs_bilinear.png" alt="Rectification 1: nearest neighbor vs bilinear with zoomed crops"><figcaption><span class="name">Rectification 1</span>full result (top), red box zoomed (bottom)</figcaption></figure>
+            <figure><img src="images/rectification_2_nn_vs_bilinear.png" alt="Rectification 2: nearest neighbor vs bilinear with zoomed crops"><figcaption><span class="name">Rectification 2</span>full result (top), red box zoomed (bottom)</figcaption></figure>
+        </div>
+        <div class="analysis">
+            <h3>Comparison</h3>
+            <p>
+                Both windows in the images are small originally (about 130&times;270 px and 230&times;370 px), so after
+                rectifying them to 600 px they are enlarged by roughly 1.6&ndash;2.2&times;. That enlargement is where
+                the two methods differ most. The nearest neighbor copies whole source pixels, so diagonal and thin
+                edges (the window frames in the zoomed crops) come out jagged. Bilinear blends the 4 neighbors, so those
+                edges stay smooth and continuous. This comes with the cost of a slight softening. Nearest neighbor is a
+                little faster, but bilinear looks better, so I used bilinear for all the mosaics.
+            </p>
+        </div>
+    </section>
+
+    <!-- ============================ A.4 ============================ -->
+    <section id="a4">
+        <h2>A.4 Blending the Images into a Mosaic</h2>
+        <p class="intro">
+            For each set, the center photo is used as the reference plane, and the left and right photos are warped
+            into it with their homographies from A.2. I downsized every photo to 1000 px on its longest side for speed,
+            adjusting each \(H\) to match (\(H' = S_{\text{dest}}\,H\,S_{\text{src}}^{-1}\)). I then pushed the four
+            corners of every image through its homography to find the full mosaic's bounds. A translation \(T\) shifts
+            everything to positive coordinates, so each image is warped with \(T H'\) onto one shared canvas.
+        </p>
+
+        <div class="analysis">
+            <h3>Blending procedure</h3>
+            <p>
+                Pasting the warped images directly on top of each other leaves hard seams wherever they overlap. This is
+                because exposure and small alignment errors change abruptly at the boundary. Instead, I chose to use
+                <strong>feathering with a distance-transform alpha</strong>. With this process, each warped image gets a
+                weight map \(w_i\) equal to every pixel's Euclidean distance to the nearest edge of that image's valid
+                region (<span class="mono">scipy.ndimage.distance_transform_edt</span> on its mask). The weight is 0 at
+                the image border and grows toward its center. The mosaic is the weighted average
+            </p>
+            <div class="equation">\[ M(x, y) = \frac{\sum_i w_i(x, y)\, I_i(x, y)}{\sum_i w_i(x, y)} \]</div>
+            <p>
+                Then, with an overlap, each image's contribution will fade out smoothly as you approach its own edge.
+                Thus, the transition between photos is spread over the whole overlap instead of happening along a
+                visible line. Finally, any of the pixels that no image covers stay black. I then crop a fixed margin off
+                the outside of each mosaic to get rid of some extra bordering.
+            </p>
+        </div>
+
+        <!-- Mosaic 1 -->
+        <h3 class="subhead">Mosaic 1: Sproul Hall</h3>
+        <div class="image-grid single wide">
+            <figure><img src="images/sproul_sources.jpg" alt="Sproul source photos"><figcaption>Source images: left &middot; center &middot; right</figcaption></figure>
+            <figure><img src="images/sproul_panorama_cropped.jpg" alt="Sproul Hall mosaic"><figcaption><span class="name">Sproul Hall mosaic</span></figcaption></figure>
+        </div>
+        <h4 class="steps-label">Intermediate steps</h4>
+        <div class="image-grid single wide">
+            <figure><img src="images/sproul_left_center_points.jpg" alt="Sproul left-center correspondences"><figcaption>Left &harr; Center correspondences</figcaption></figure>
+            <figure><img src="images/sproul_right_center_points.jpg" alt="Sproul right-center correspondences"><figcaption>Right &harr; Center correspondences</figcaption></figure>
+            <figure><img src="images/sproul_warped.jpg" alt="Sproul warped images on the shared canvas"><figcaption>Each image warped onto the shared canvas</figcaption></figure>
+            <figure><img src="images/sproul_blend_weights.png" alt="Sproul distance-transform blend weights"><figcaption>Distance-transform weights (bright = high weight)</figcaption></figure>
+        </div>
+
+        <!-- Mosaic 2 -->
+        <h3 class="subhead">Mosaic 2: Sather Gate</h3>
+        <div class="image-grid single wide">
+            <figure><img src="images/sather_sources.jpg" alt="Sather Gate source photos"><figcaption>Source images: left &middot; center &middot; right</figcaption></figure>
+            <figure><img src="images/sather_panorama_cropped.jpg" alt="Sather Gate mosaic"><figcaption><span class="name">Sather Gate mosaic</span></figcaption></figure>
+        </div>
+        <h4 class="steps-label">Intermediate steps</h4>
+        <div class="image-grid single wide">
+            <figure><img src="images/sather_left_center_points.jpg" alt="Sather Gate left-center correspondences"><figcaption>Left &harr; Center correspondences</figcaption></figure>
+            <figure><img src="images/sather_right_center_points.jpg" alt="Sather Gate right-center correspondences"><figcaption>Right &harr; Center correspondences</figcaption></figure>
+            <figure><img src="images/sather_warped.jpg" alt="Sather Gate warped images"><figcaption>Each image warped onto the shared canvas</figcaption></figure>
+            <figure><img src="images/sather_blend_weights.png" alt="Sather Gate blend weights"><figcaption>Distance-transform weights</figcaption></figure>
+        </div>
+
+        <!-- Mosaic 3 -->
+        <h3 class="subhead">Mosaic 3: Residential Street</h3>
+        <div class="image-grid single wide">
+            <figure><img src="images/residential_sources.jpg" alt="Residential street source photos"><figcaption>Source images: left &middot; center &middot; right</figcaption></figure>
+            <figure><img src="images/residential_panorama_cropped.jpg" alt="Residential street mosaic"><figcaption><span class="name">Residential street mosaic</span></figcaption></figure>
+        </div>
+        <h4 class="steps-label">Intermediate steps</h4>
+        <div class="image-grid single wide">
+            <figure><img src="images/residential_left_center_points.jpg" alt="Residential left-center correspondences"><figcaption>Left &harr; Center correspondences</figcaption></figure>
+            <figure><img src="images/residential_right_center_points.jpg" alt="Residential right-center correspondences"><figcaption>Right &harr; Center correspondences</figcaption></figure>
+            <figure><img src="images/residential_warped.jpg" alt="Residential warped images"><figcaption>Each image warped onto the shared canvas</figcaption></figure>
+            <figure><img src="images/residential_blend_weights.png" alt="Residential blend weights"><figcaption>Distance-transform weights</figcaption></figure>
+        </div>
+
+        <div class="analysis">
+            <h3>Observations</h3>
+            <p>
+                In all three of the mosaics I created, the transitions between photos are hard to spot on initial view.
+                The feathering spreads any brightness difference that may be present between shots across the whole
+                overlap, so there are no sharp seams that can be noticeable. The bow tie outline of the mosaic comes from
+                projecting everything onto the center photo's plane. Therefore, the farther a photo is rotated from the
+                center, the more its homography stretches it, so the outer images fan out toward the edges of the
+                canvas.
+            </p>
+        </div>
+    </section>
+
+</main>
+
+
+
+<footer>
+    <a href="../index.html">&larr; back to portfolio home</a>
+</footer>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        renderMathInElement(document.body, {
+            delimiters: [
+                {left: "\\[", right: "\\]", display: true},
+                {left: "\\(", right: "\\)", display: false}
+            ]
+        });
+    });
+</script>
+
+</body>
+</html>
