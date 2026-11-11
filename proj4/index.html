@@ -327,6 +327,13 @@
         color: var(--text);
         letter-spacing: -0.02em;
     }
+    .text-placeholder {
+        color: var(--muted);
+        font-style: italic;
+        border-left: 3px solid var(--border);
+        padding-left: 0.75rem;
+    }
+    .placeholder.short { height: 200px; }
     .badge.pending { background: #f3f1ec; color: var(--muted); border: 1px solid var(--border); }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; }
     .image-grid.single.wide { max-width: 1100px; }
@@ -345,6 +352,22 @@
     .hybrid-pair .hybrid-far { width: 112px; }
     .hybrid-pair .hybrid-far img { width: 96px; margin: 8px auto 0; }
     .hybrid-pair .hybrid-far figcaption { padding: 0.5rem; font-size: 0.75rem; }
+    .image-grid.side-by-side {
+        max-width: 1200px;
+        align-items: stretch;
+    }
+    .image-grid.side-by-side figure {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        background: #000;
+    }
+    .image-grid.side-by-side figcaption {
+        background: var(--card);
+    }
+    @media (max-width: 760px) {
+        .image-grid.side-by-side { grid-template-columns: 1fr; }
+    }
     h4.steps-label {
         max-width: 1100px;
         margin: 1.75rem auto 0;
@@ -378,6 +401,13 @@
         <a href="#a2">A.2 Recovering Homographies</a>
         <a href="#a3">A.3 Warping &amp; Rectification</a>
         <a href="#a4">A.4 Blending into Mosaics</a>
+    </nav>
+    <p class="toc-label">Part B: Feature Matching for Autostitching</p>
+    <nav class="toc">
+        <a href="#b1">B.1 Harris Corners</a>
+        <a href="#b2">B.2 Feature Descriptors</a>
+        <a href="#b3">B.3 Feature Matching</a>
+        <a href="#b4">B.4 RANSAC &amp; Auto Mosaics</a>
     </nav>
 </header>
 
@@ -600,6 +630,146 @@
                 projecting everything onto the center photo's plane. Therefore, the farther a photo is rotated from the
                 center, the more its homography stretches it, so the outer images fan out toward the edges of the
                 canvas.
+            </p>
+        </div>
+    </section>
+
+
+    <div class="part-divider" id="partB"><span>Part B</span>Feature Matching for Autostitching</div>
+
+    <!-- ============================ B.1 ============================ -->
+    <section id="b1">
+        <h2>B.1 Harris Corner Detection</h2>
+        <p class="intro">
+            In Part B, I automated the correspondences that I previously clicked by hand in Part A, following Brown et
+            al., <em>Multi-Image Matching using Multi-Scale Oriented Patches</em>. The first step of this process was to
+            find the interest points. For this, we use the Harris detector to score every pixel by how much the image
+            changes when a small window around it shifts in any direction. A corner scores high on this scoring system
+            because it changes in every direction, while edges and flat regions don't. I run the scoring at a single
+            scale on the grayscale image downsized to 1000 px (Gaussian &sigma; = 1), keep every local maximum of the
+            response, and discard points within 20 px of the border so there is room for an image descriptor.
+        </p>
+        <div class="gallery-grid gallery-3">
+            <figure><img src="images/b1_harris_all.jpg" alt="All Harris corners on Sproul center"><figcaption><span class="name">All Harris corners</span>18,605 corners, without ANMS</figcaption></figure>
+            <figure><img src="images/b1_harris_top500.jpg" alt="Top 500 Harris corners by strength"><figcaption><span class="name">Strongest 500</span>without ANMS</figcaption></figure>
+            <figure><img src="images/b1_anms.jpg" alt="500 corners after ANMS"><figcaption><span class="name">500 after ANMS</span>with ANMS</figcaption></figure>
+        </div>
+        <div class="analysis">
+            <h3>Adaptive Non-Maximal Suppression (ANMS)</h3>
+            <p>
+                The issue with the raw detector is that it returns too many points (18,605 on this image), including
+                thousands of weak responses to noise in the dark sky. Even if we keep only the strongest 500, it is no
+                better. They cluster on the bright, high-contrast windows and the planter. This causes large parts of the
+                image to get no points at all, making the homography poorly constrained there.
+            </p>
+            <p>
+                ANMS fixes this. For each corner \(i\), I compute a suppression radius. This is the distance to the nearest
+                corner that is significantly stronger,
+            </p>
+            <div class="equation">\[ r_i = \min_j \lVert \mathbf{x}_i - \mathbf{x}_j \rVert \quad \text{s.t.} \quad f(\mathbf{x}_i) < c_{\text{robust}}\, f(\mathbf{x}_j), \qquad c_{\text{robust}} = 0.9 \]</div>
+            <p>
+                Then I keep the 500 corners with the largest radii, considering the 5,000 strongest candidates. A corner
+                survives if it is the strongest point in a large neighborhood, so the kept points are both strong and
+                spread evenly over the image (the smallest kept radius here was 16.3 px).
+            </p>
+        </div>
+    </section>
+
+    <!-- ============================ B.2 ============================ -->
+    <section id="b2">
+        <h2>B.2 Feature Descriptor Extraction</h2>
+        <p class="intro">
+            From there, each ANMS corner gets a descriptor which summarizes the image context around it. To do so, I
+            blur the grayscale image with a Gaussian (&sigma; = 2), take the axis-aligned 40&times;40 window centered on
+            the corner, and sample every 5th pixel to get an 8&times;8 patch. This blur first prevents aliasing from that
+            subsampling. Finally, I bias/gain-normalize the patch (subtract its mean and divide by its standard
+            deviation), so that the descriptors don't depend on overall brightness or contrast. Each descriptor is a
+            64-dimensional vector with mean 0 and standard deviation 1 (i.e. normalized).
+        </p>
+        <div class="image-grid single wide">
+            <figure><img src="images/b2_descriptors.png" alt="40x40 windows and their normalized 8x8 descriptors"><figcaption>Top: 40&times;40 windows around six ANMS corners. Bottom: their normalized 8&times;8 descriptors.</figcaption></figure>
+        </div>
+    </section>
+
+    <!-- ============================ B.3 ============================ -->
+    <section id="b3">
+        <h2>B.3 Feature Matching</h2>
+        <p class="intro">
+            To match two images and the related points, I first compute the Euclidean distance from every descriptor in
+            one image to every descriptor in the other and find each one's nearest neighbor (1-NN) and second-nearest
+            neighbor (2-NN). Since a single distance threshold doesn't work well, I use Lowe's ratio test instead and keep
+            a match only if the best candidate is much better than the runner-up match:
+        </p>
+        <div class="equation">\[ \frac{\lVert d - d_{1\text{-NN}} \rVert}{\lVert d - d_{2\text{-NN}} \rVert} < 0.5 \]</div>
+        <p class="intro">
+            A correct match usually has one clearly closest neighbor, while a wrong match will have several
+            similar-looking candidates, so the ratio would be close to 1. Figure 6b of the paper shows correct and
+            incorrect matches separate well around this range, so I chose a strict 0.5 to keep the matches clean for
+            RANSAC.
+        </p>
+        <h3 class="subhead">Sproul Hall</h3>
+        <div class="image-grid single wide">
+            <figure><img src="images/b3_matches_left.jpg" alt="Sproul left to center feature matches"><figcaption><span class="name">Left &harr; Center</span>40 matches</figcaption></figure>
+            <figure><img src="images/b3_matches_right.jpg" alt="Sproul right to center feature matches"><figcaption><span class="name">Right &harr; Center</span>12 matches</figcaption></figure>
+        </div>
+    </section>
+
+    <!-- ============================ B.4 ============================ -->
+    <section id="b4">
+        <h2>B.4 RANSAC for Robust Homography</h2>
+        <p class="intro">
+            Even after the ratio test, there is a chance that matches can be wrong, and a bad match ruins the
+            least-squares homography. I implemented 4-point RANSAC from scratch:
+        </p>
+        <ul class="legend" style="max-width: 960px;">
+            <li>1. Pick 4 random matches and compute the exact homography through them.</li>
+            <li>2. Map every matched point through that \(H\) and count the <em>inliers</em>: matches that land within \(\epsilon = 2\) px of their partner.</li>
+            <li>3. Repeat 2,000 times and keep the largest inlier set.</li>
+            <li>4. Refit \(H\) with least squares (my Part A <span class="mono">calc_homography</span>) on all of those inliers.</li>
+        </ul>
+        <p class="intro">
+            The final homographies go through the same warping and distance-transform blending as Part A, so the only
+            difference between the manual and automatic mosaics is where the correspondences came from.
+        </p>
+        <div class="image-grid single wide">
+            <figure><img src="images/b4_sproul_inliers_left.jpg" alt="Sproul left to center RANSAC inliers"><figcaption><span class="name">Sproul Left &harr; Center RANSAC inliers</span>37 of 40 matches kept</figcaption></figure>
+        </div>
+        <div class="analysis">
+            <h3>RANSAC inliers per pair</h3>
+            <table class="metrics">
+                <tr><th>Set</th><th>Left &harr; Center</th><th>Right &harr; Center</th></tr>
+                <tr><td>Sproul Hall</td><td class="mono">37 / 40</td><td class="mono">10 / 12</td></tr>
+                <tr><td>Sather Gate</td><td class="mono">20 / 26</td><td class="mono">28 / 37</td></tr>
+                <tr><td>Residential</td><td class="mono">5 / 5</td><td class="mono">31 / 43</td></tr>
+            </table>
+        </div>
+
+        <h3 class="subhead">Mosaic 1: Sproul Hall</h3>
+        <div class="image-grid side-by-side">
+            <figure><img src="images/b4_sproul_manual.jpg" alt="Sproul Hall manual mosaic"><figcaption><span class="name">Manual</span>hand-picked correspondences (Part A)</figcaption></figure>
+            <figure><img src="images/b4_sproul_auto.jpg" alt="Sproul Hall automatic mosaic"><figcaption><span class="name">Automatic</span>Harris + ANMS + matching + RANSAC</figcaption></figure>
+        </div>
+        <h3 class="subhead">Mosaic 2: Sather Gate</h3>
+        <div class="image-grid side-by-side">
+            <figure><img src="images/b4_sather_manual.jpg" alt="Sather Gate manual mosaic"><figcaption><span class="name">Manual</span>hand-picked correspondences (Part A)</figcaption></figure>
+            <figure><img src="images/b4_sather_auto.jpg" alt="Sather Gate automatic mosaic"><figcaption><span class="name">Automatic</span>Harris + ANMS + matching + RANSAC</figcaption></figure>
+        </div>
+        <h3 class="subhead">Mosaic 3: Residential Street</h3>
+        <div class="image-grid side-by-side">
+            <figure><img src="images/b4_residential_manual.jpg" alt="Residential street manual mosaic"><figcaption><span class="name">Manual</span>hand-picked correspondences (Part A)</figcaption></figure>
+            <figure><img src="images/b4_residential_auto.jpg" alt="Residential street automatic mosaic"><figcaption><span class="name">Automatic</span>Harris + ANMS + matching + RANSAC</figcaption></figure>
+        </div>
+
+        <div class="analysis">
+            <h3>Manual vs. automatic</h3>
+            <p>
+                Here we can see that the automatic mosaics align as well as the manual ones: buildings, the gate, and the
+                house line up across the seams with no visible doubling. One noticeable difference between the automatic
+                and manual is that the canvas shapes differ because each method's homography is a little different,
+                changing how far the outer images are stretched. Furthermore, automatic stitching needs no clicking, and
+                RANSAC discards the matches that don't fit. The weakest pair was Residential image left to center, where
+                only 5 matches passed this strict ratio test. The mosaic still aligns, but a homography supported by so
+                few points may break, and a looser ratio threshold would give RANSAC more to work with.
             </p>
         </div>
     </section>
